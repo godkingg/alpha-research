@@ -46,16 +46,19 @@ data_loader.py          →   features.py              →   ic_analysis.py
 
 ## Kết quả chính
 
-_(Kết quả dưới đây là từ nghiên cứu ban đầu trên universe 10 mã — Ngày 5, cùng 248 quan sát chung. Cần chạy lại trên universe 30 mã để cập nhật bảng này — xem "Cách chạy".)_
+Đã chạy lại trên universe **30 mã VN30**, 2024-01-01 → 2025-12-31, 235 quan sát chung (common obs). Kết quả **đảo ngược hoàn toàn** so với nghiên cứu ban đầu trên 10 mã (Ngày 5) — xem phân tích chi tiết ở [`reports/data_audit.md`](reports/data_audit.md).
 
-| Metric              | Alpha C | Ensemble C+D4 | Ensemble C+D5 |
-| ------------------- | ------- | ------------- | ------------- |
-| Mean IC             | 0.0603  | 0.0716        | 0.0725        |
-| IC IR               | 0.1648  | 0.2266        | 0.2072        |
-| t-stat              | 2.596   | 3.569         | 3.263         |
-| Hit Rate            | 0.5806  | 0.5766        | 0.5484        |
-| Sig. sau Bonferroni | ✗       | ✓             | ✓             |
-| Sig. sau FDR        | ✓       | ✓             | ✓             |
+| Metric                    | AlphaC_TrendCond | Ensemble_C_D4 | Ensemble_C_D5 | VolumeRatio | AlphaB_TSRankVol | ZLEMA_Reversion |
+| ------------------------- | ---------------- | ------------- | ------------- | ----------- | ---------------- | --------------- |
+| Mean IC                   | -0.0094          | -0.0094       | -0.0130       | +0.0329     | -0.0360          | -0.0385         |
+| IC IR                     | -0.0423          | -0.0444       | -0.0559       | +0.1656     | -0.1707          | -0.1662         |
+| t-stat                    | -0.648           | -0.680        | -0.856        | 2.538       | -2.617           | -2.548          |
+| Hit Rate                  | 0.4766           | 0.5064        | 0.4511        | 0.6000      | 0.4340           | 0.4128          |
+| Sig. raw (α=0.05)         | ✗                | ✗             | ✗             | ✓           | ✓                | ✓               |
+| Sig. Bonferroni (12 test) | ✗                | ✗             | ✗             | ✗           | ✗                | ✗               |
+| Sig. FDR                  | ✗                | ✗             | ✗             | ✓           | ✓                | ✓               |
+
+**Diễn giải quan trọng:** Alpha C và 2 chiến lược Ensemble — vốn là kết quả chính của nghiên cứu Ngày 5 — **mất toàn bộ ý nghĩa thống kê và đảo dấu** khi mở rộng universe. Đây là dấu hiệu overfit vào sample 10 mã ban đầu (chi tiết: mục 6, `data_audit.md`). Ngược lại, **VolumeRatio, AlphaB_TSRankVol, ZLEMA_Reversion** nổi lên có ý nghĩa ở mức raw p-value và FDR (nhưng chưa vượt Bonferroni) — cần out-of-sample test trước khi tin tưởng đây là tín hiệu thật.
 
 Sharpe Ratio / Max Drawdown / Annualized Return: **chưa tính** — hiện tại mới dừng ở phân tích IC (dự báo), chưa có backtest return thực tế (chưa tính transaction cost, sizing, slippage).
 
@@ -64,8 +67,9 @@ Sharpe Ratio / Max Drawdown / Annualized Return: **chưa tính** — hiện tạ
 - **Chưa backtest return thực:** toàn bộ đánh giá hiện tại dựa trên IC (khả năng dự báo), chưa mô phỏng P&L có transaction cost/slippage.
 - **Survivorship bias:** universe lấy theo VN30 hiện tại, không phản ánh đúng thành phần rổ tại các thời điểm quá khứ trong giai đoạn test. Chi tiết: `reports/data_audit.md`.
 - **Overlapping observations:** forward return dùng N_FWD=5 ngày gối lên nhau, có thể làm t-stat bị thổi phồng nếu tính theo công thức IID chuẩn (chưa áp dụng Newey-West).
-- **Ensemble weight cố định 50/50:** chưa test out-of-sample, có rủi ro overfit nhẹ vào giai đoạn 2025 đang dùng để đánh giá.
-- **Kết quả bảng trên là từ universe 10 mã (Ngày 5):** cần chạy lại toàn bộ pipeline trên universe 30 mã để xác nhận kết luận còn giữ nguyên.
+- **Ensemble weight cố định 50/50:** thiết kế cho Alpha C — hiện Alpha C đã mất ý nghĩa trên 30 mã nên cấu trúc ensemble này cần xem lại từ đầu, không chỉ là vấn đề tinh chỉnh trọng số.
+- **Dữ liệu MCH bất thường:** 10/28 phiên biến động >7% thuộc về MCH (biên độ tới ±14%), có thể ảnh hưởng đến các factor trend-based. Chưa loại trừ khỏi phân tích — xem mục 3, `data_audit.md`.
+- **VolumeRatio/AlphaB/ZLEMA mới nổi lên có ý nghĩa (sig. FDR, chưa Bonferroni):** chưa qua out-of-sample test, chưa nên coi là kết luận cuối cùng — kết quả trên 10 mã cho thấy sự đảo ngược hoàn toàn giữa các lần thử universe khác nhau là hoàn toàn có thể xảy ra.
 
 ## Cách chạy
 
