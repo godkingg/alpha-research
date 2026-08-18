@@ -60,7 +60,18 @@ data_loader.py          →   features.py              →   ic_analysis.py
 
 **Diễn giải quan trọng:** Alpha C và 2 chiến lược Ensemble — vốn là kết quả chính của nghiên cứu Ngày 5 — **mất toàn bộ ý nghĩa thống kê và đảo dấu** khi mở rộng universe. Đây là dấu hiệu overfit vào sample 10 mã ban đầu (chi tiết: mục 6, `data_audit.md`). Ngược lại, **VolumeRatio, AlphaB_TSRankVol, ZLEMA_Reversion** nổi lên có ý nghĩa ở mức raw p-value và FDR (nhưng chưa vượt Bonferroni) — cần out-of-sample test trước khi tin tưởng đây là tín hiệu thật.
 
-Sharpe Ratio / Max Drawdown / Annualized Return: **chưa tính** — hiện tại mới dừng ở phân tích IC (dự báo), chưa có backtest return thực tế (chưa tính transaction cost, sizing, slippage).
+### Deflated Sharpe Ratio (Ngày 8) — kiểm định độc lập, xem chi tiết mục 7 trong `data_audit.md`
+
+DSR coi chuỗi IC hàng ngày là "return" của factor, chỉnh cho skewness/kurtosis thật và cho việc đã thử N=12 factor (thay vì chỉ chỉnh N qua Bonferroni/FDR trên p-value như trên).
+
+| Universe      | Factor tốt nhất theo t-stat | DSR của nó          | Factor tốt nhất theo DSR | DSR    |
+| ------------- | --------------------------- | ------------------- | ------------------------ | ------ |
+| 10 mã (N=201) | AlphaC_TrendCond (t=2.62)   | **0.4442** (< 0.5!) | Ensemble_C_D4            | 0.6293 |
+| 30 mã (N=235) | VolumeRatio (t=2.53)        | **0.4563** (< 0.5)  | VolumeRatio              | 0.4563 |
+
+**Phát hiện quan trọng nhất:** ở universe 10 mã, DSR của AlphaC_TrendCond đã chỉ 0.4442 — **dưới cả mức "tung đồng xu"** — ngay cả khi t-stat=2.62 trông "significant" theo chuẩn cổ điển. Nghĩa là DSR đã **cảnh báo trước, không cần đợi chạy lại trên 30 mã**, rằng độ tin cậy của AlphaC là mong manh. Ở cả 2 universe, **không factor nào đạt DSR vượt 0.65**, thấp hơn nhiều ngưỡng thường dùng để tự tin (DSR > 0.95) — kết luận nhất quán hơn nhiều so với khi chỉ nhìn t-stat (vốn "khen" các factor khác nhau ở mỗi universe).
+
+Sharpe Ratio (annualized, trên return thực) / Max Drawdown / Annualized Return: **chưa tính** — hiện tại mới dừng ở phân tích IC/DSR (dự báo), chưa có backtest return thực tế (chưa tính transaction cost, sizing, slippage).
 
 ## Hạn chế & Rủi ro
 
@@ -70,6 +81,8 @@ Sharpe Ratio / Max Drawdown / Annualized Return: **chưa tính** — hiện tạ
 - **Ensemble weight cố định 50/50:** thiết kế cho Alpha C — hiện Alpha C đã mất ý nghĩa trên 30 mã nên cấu trúc ensemble này cần xem lại từ đầu, không chỉ là vấn đề tinh chỉnh trọng số.
 - **Dữ liệu MCH bất thường:** 10/28 phiên biến động >7% thuộc về MCH (biên độ tới ±14%), có thể ảnh hưởng đến các factor trend-based. Chưa loại trừ khỏi phân tích — xem mục 3, `data_audit.md`.
 - **VolumeRatio/AlphaB/ZLEMA mới nổi lên có ý nghĩa (sig. FDR, chưa Bonferroni):** chưa qua out-of-sample test, chưa nên coi là kết luận cuối cùng — kết quả trên 10 mã cho thấy sự đảo ngược hoàn toàn giữa các lần thử universe khác nhau là hoàn toàn có thể xảy ra.
+- **DSR chỉ bảo vệ khỏi multiple-testing TRONG CÙNG 1 universe** (12 factor cùng 1 lần chạy) — không bảo vệ khỏi việc chọn universe làm cả nhóm factor trông đẹp hơn (giả thuyết về nhóm cổ phiếu vốn hóa lớn VIC/VHM/VRE/VPL chi phối kết quả 30 mã — xem mục 7.3, `data_audit.md` — vẫn chưa kiểm định).
+- **`SR_0*` trong DSR ước lượng từ chính 12 Sharpe quan sát được** (self-referential, không có phân phối null độc lập) — đây là xấp xỉ thực dụng theo đúng phương pháp gốc của Bailey & López de Prado khi không có backtest null riêng, nhưng cần hiểu rõ giới hạn này khi diễn giải con số DSR.
 
 ## Cách chạy
 
@@ -97,8 +110,12 @@ ic_series_common = align_common_obs(ic_series)
 summary = ic_summary_table(ic_series_common)
 correction = multiple_testing_correction(summary)
 
-# 4. (Tuỳ chọn) Monte Carlo return có tương quan, dùng cho stress-test / risk sizing
-returns = price_df.pct_change().dropna()
+# 4. Deflated Sharpe Ratio (Ngày 8) — kiểm định độc lập, chỉnh skew/kurtosis + N=12 trials
+dsr_table = dsr_summary_table(ic_series_common)
+compare_3way = compare_sharpe_measures(summary, dsr_table)  # Sharpe thô vs t-stat vs DSR
+
+# 5. (Tuỳ chọn) Monte Carlo return có tương quan, dùng cho stress-test / risk sizing
+returns = price_df.pct_change(fill_method=None).dropna()
 simulated = simulate_correlated_returns(returns, n_sims=10_000)
 ```
 

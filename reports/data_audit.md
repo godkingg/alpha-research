@@ -80,3 +80,49 @@ Chạy `multiple_testing_correction()` trên 12 factor (α=0.05, Bonferroni thre
 2. Out-of-sample test cho VolumeRatio, AlphaB_TSRankVol, ZLEMA_Reversion (chia theo thời gian, không chỉ theo universe).
 3. Xem xét loại bỏ ngưỡng cứng 5% trong Alpha C — khả năng cao đây là tham số bị overfit vào universe 10 mã ban đầu.
 4. Đã sửa 2 vấn đề kỹ thuật trong code: (a) `pct_change()` dùng `fill_method=None` để tránh forward-fill ẩn NaN thành return giả 0%; (b) `calc_ic()` bỏ qua các ngày factor/forward-return constant (tránh warning "input array is constant" và IC giả).
+
+---
+
+## 7. Deflated Sharpe Ratio (Ngày 8) — kiểm định độc lập cho kết luận ở mục 2 và 6
+
+Coi chuỗi IC hàng ngày của mỗi factor như "return" của một chiến lược, áp dụng DSR
+(Bailey & López de Prado, 2014) với **N_trials=12** (đúng số factor đã test trong project),
+tính trên cả 2 universe. Implementation: `src/deflated_sharpe.py`.
+
+### 7.1 Universe 10 mã (N_obs=201 common)
+
+| Factor             | Sharpe thô (IC IR) | t-stat | DSR Z-score | **DSR**    |
+| ------------------ | ------------------ | ------ | ----------- | ---------- |
+| Ensemble_C_D4      | 0.2182             | 3.0938 | 0.3300      | **0.6293** |
+| AlphaC_TrendCond   | 0.1851             | 2.6241 | -0.1403     | **0.4442** |
+| Ensemble_C_D5      | 0.1642             | 2.3273 | -0.4395     | 0.3302     |
+| AlphaA_RetCorr     | 0.1112             | 1.5762 | -1.1927     | 0.1165     |
+| (8 factor còn lại) | —                  | —      | —           | < 0.06     |
+
+**Phát hiện quan trọng:** t-stat=2.6241 của AlphaC_TrendCond trông "significant" theo chuẩn thống kê cổ điển (p<0.01), nhưng **DSR chỉ 0.4442 — dưới mức 0.5**, tức thấp hơn cả xác suất tung đồng xu. Ngay cả Ensemble_C_D4 — factor có DSR cao nhất — cũng chỉ đạt 0.6293, thấp hơn nhiều so với ngưỡng thường dùng để tự tin (DSR > 0.95).
+
+**→ DSR đã cảnh báo được từ universe 10 mã, TRƯỚC KHI mở rộng lên 30 mã**, rằng độ tin cậy của AlphaC_TrendCond là mong manh — không cần đợi kết quả đảo dấu ở 30 mã mới biết. Đây là bằng chứng cho thấy quy trình đánh giá factor trước đây (chỉ dùng t-stat + Bonferroni/FDR) đã đánh giá quá lạc quan.
+
+### 7.2 Universe 30 mã (N_obs=235 common)
+
+| Factor             | Sharpe thô (IC IR) | t-stat  | DSR Z-score | **DSR**    |
+| ------------------ | ------------------ | ------- | ----------- | ---------- |
+| VolumeRatio        | 0.1652             | 2.5318  | -0.1097     | **0.4563** |
+| AlphaA_RetCorr     | 0.1053             | 1.6147  | -1.0215     | 0.1535     |
+| AlphaC_TrendCond   | -0.0389            | -0.5964 | -3.2304     | 0.0006     |
+| Ensemble_C_D4      | -0.0430            | -0.6592 | -3.3137     | 0.0005     |
+| Ensemble_C_D5      | -0.0527            | -0.8079 | -3.4421     | 0.0003     |
+| (7 factor còn lại) | —                  | —       | —           | ≤ 0.03     |
+
+**Xác nhận:** AlphaC_TrendCond và cả 2 Ensemble sụp đổ hoàn toàn về DSR (~0.0003-0.0006, gần như chắc chắn không có skill thật). VolumeRatio — factor tốt nhất ở 30 mã theo t-stat — cũng chỉ đạt DSR 0.4563, **vẫn dưới 0.5**.
+
+**Kết luận xuyên suốt cả 2 universe: chưa có factor nào trong 12 factor đạt DSR đủ thuyết phục (>0.5, càng chưa đạt >0.95) để tự tin về skill thật.** Đây là câu chuyện nhất quán hơn nhiều so với khi chỉ nhìn t-stat — t-stat "khen" các factor khác nhau ở mỗi universe (AlphaC ở 10 mã, VolumeRatio ở 30 mã), trong khi DSR nhất quán nói: "chưa đủ bằng chứng ở cả hai".
+
+### 7.3 Giả thuyết cho hiện tượng "factor đổi vai" giữa 2 universe
+
+Ghi chú từ quá trình phân tích: các factor vô nghĩa ở 10 mã lại có ý nghĩa hơn ở 30 mã (và ngược lại), nhiều khả năng do nhóm cổ phiếu vốn hóa lớn mới được thêm vào ở 30 mã (VIC, VHM, VRE, VPL) có xu hướng hút dòng tiền mạnh, chi phối cross-section khác hẳn so với universe 10 mã ban đầu (vốn chỉ có 1 mã thuộc nhóm này là VRE). **Đây là giả thuyết, chưa kiểm định** — cần thử loại nhóm VIC-Group khỏi universe 30 mã và tính lại DSR để xác nhận.
+
+### 7.4 Giới hạn của DSR trong phân tích này
+
+- `SR_0*` được ước lượng từ **chính 12 Sharpe quan sát được trong cùng universe** (self-referential) — đây là cách tiếp cận thực dụng khi không biết phân phối null thật, nhưng có nghĩa DSR ở đây **chỉ bảo vệ khỏi việc chọn factor tốt nhất trong 12 factor của CÙNG 1 universe**, không bảo vệ khỏi việc chọn universe làm cả nhóm factor trông đẹp hơn (loại bias này vẫn cần out-of-sample theo universe, như đã làm thủ công ở Ngày 7).
+- Kurtosis dùng trong công thức là kurtosis kiểu Pearson (normal=3); `pandas.Series.kurtosis()` trả về excess kurtosis nên cần +3 trước khi đưa vào công thức — đã xử lý đúng trong `src/deflated_sharpe.py`.
